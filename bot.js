@@ -5,6 +5,8 @@
  * @version 3.3.0
  */
 
+require('dotenv').config();
+
 // Declare constants which will be used throughout the bot.
 
 const fs = require("fs");
@@ -31,8 +33,20 @@ const client = new Client({
 		GatewayIntentBits.DirectMessages,
 		GatewayIntentBits.GuildMessages,
 		GatewayIntentBits.MessageContent,
+		GatewayIntentBits.GuildMembers,
+		GatewayIntentBits.GuildPresences,
+		GatewayIntentBits.GuildMessageReactions,
+		GatewayIntentBits.GuildMessageTyping,
+		GatewayIntentBits.DirectMessageReactions,
+		GatewayIntentBits.DirectMessageTyping
 	],
-	partials: [Partials.Channel],
+	partials: [
+		Partials.Channel,
+		Partials.Message,
+		Partials.User,
+		Partials.GuildMember,
+		Partials.Reaction
+	],
 });
 
 /**********************************************************************/
@@ -235,7 +249,7 @@ for (const module of selectMenus) {
 /**********************************************************************/
 // Registration of Slash-Commands in Discord API
 
-const rest = new REST({ version: "9" }).setToken(token);
+const rest = new REST({ version: '10' }).setToken(token);
 
 const commandJsonData = [
 	...Array.from(client.slashCommands.values()).map((c) => c.data.toJSON()),
@@ -244,32 +258,27 @@ const commandJsonData = [
 
 (async () => {
 	try {
-		console.log("Started refreshing application (/) commands.");
+		console.log('Started refreshing application (/) commands.');
 
+		// First, try to delete all existing commands
 		await rest.put(
-			/**
-			 * By default, you will be using guild commands during development.
-			 * Once you are done and ready to use global commands (which have 1 hour cache time),
-			 * 1. Please uncomment the below (commented) line to deploy global commands.
-			 * 2. Please comment the below (uncommented) line (for guild commands).
-			 */
+			Routes.applicationCommands(client_id),
+			{ body: [] }
+		);
 
-			Routes.applicationGuildCommands(client_id, test_guild_id),
-
-			/**
-			 * Good advice for global commands, you need to execute them only once to update
-			 * your commands to the Discord API. Please comment it again after running the bot once
-			 * to ensure they don't get re-deployed on the next restart.
-			 */
-
-			// Routes.applicationCommands(client_id)
-
+		// Then register new commands
+		const data = await rest.put(
+			Routes.applicationCommands(client_id),
 			{ body: commandJsonData }
 		);
 
-		console.log("Successfully reloaded application (/) commands.");
+		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
 	} catch (error) {
-		console.error(error);
+		console.error('Error refreshing commands:', error);
+		if (error.code === 50001) {
+			console.log('Make sure the bot has the applications.commands scope and proper permissions.');
+			console.log('Try reinviting the bot using the OAuth2 URL from the Discord Developer Portal.');
+		}
 	}
 })();
 
